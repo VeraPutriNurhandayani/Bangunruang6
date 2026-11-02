@@ -1,0 +1,1892 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GeoMotion 3D: Petualangan Sensor Bangun Ruang</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js untuk Bangun Ruang 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js untuk Efek Suara Game -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Font Awesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands untuk Pelacakan Kerangka Tangan (Opsional/Otomatis dengan Fallback Motion Grid) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        h1, h2, h3, .font-game {
+            font-family: 'Fredoka', sans-serif;
+        }
+        /* Animasi Radar & Sensor */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 0.4; }
+            100% { transform: scale(0.8); opacity: 0.8; }
+        }
+        @keyframes scanline {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+        .sensor-ring {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+        .scanline-effect {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, transparent, #38bdf8, #818cf8, transparent);
+            box-shadow: 0 0 12px #38bdf8;
+            animation: scanline 3s linear infinite;
+            pointer-events: none;
+            z-index: 20;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.35), inset 0 0 10px rgba(56, 189, 248, 0.15);
+        }
+        .virtual-cursor {
+            pointer-events: none;
+            position: fixed;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: width 0.15s, height 0.15s;
+        }
+        /* Animasi Zoom-In Halus untuk Splash Screen 6 Detik */
+        @keyframes smoothZoomIn {
+            0% {
+                transform: scale(0.82);
+                opacity: 0;
+            }
+            18% {
+                opacity: 1;
+            }
+            85% {
+                transform: scale(1.04);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.08);
+                opacity: 0;
+            }
+        }
+        .splash-zoom-anim {
+            animation: smoothZoomIn 6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        @keyframes progressSixSec {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+        .splash-progress-bar {
+            animation: progressSixSec 6s linear forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900">
+
+    <!-- ========================================================= -->
+    <!-- A. SPLASH SCREEN (INTRO) - LAYAR PUTIH BERSIH 6 DETIK     -->
+    <!-- ========================================================= -->
+    <div id="splashScreen" class="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center px-6 text-center select-none transition-opacity duration-500">
+        <div class="splash-zoom-anim max-w-2xl mx-auto flex flex-col items-center">
+            <!-- Ikon Edukasi Elegan -->
+            <div class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-4xl shadow-xl shadow-sky-500/20 mb-6">
+                <i class="fa-solid fa-cubes"></i>
+            </div>
+
+            <!-- Teks Utama Sesuai Permintaan -->
+            <p class="text-xs sm:text-sm font-bold tracking-[0.25em] text-sky-600 uppercase mb-2">
+                Media Pembelajaran Interaktif Matematika
+            </p>
+            <h1 class="font-game text-2xl sm:text-4xl md:text-5xl font-bold text-slate-900 tracking-tight leading-tight">
+                Created by VERA PUTRI NURHANDAYANI
+            </h1>
+            <div class="mt-4 inline-flex items-center gap-2 px-5 py-2 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-semibold text-base sm:text-xl shadow-sm">
+                <span class="text-sky-600 text-xl">•</span>
+                <span>Guru UPTD SDN 1 BANDANHURIP</span>
+            </div>
+        </div>
+
+        <!-- Indikator Loading 6 Detik di Bagian Bawah Layar Putih -->
+        <div class="absolute bottom-10 w-64 sm:w-80 flex flex-col items-center gap-2">
+            <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-sky-500 to-indigo-600 splash-progress-bar"></div>
+            </div>
+            <span class="text-[11px] font-medium text-slate-400 tracking-wider uppercase">Memuat GeoMotion 3D...</span>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- POP-UP AWAL (WELCOME MODAL SETELAH SPLASH SCREEN)         -->
+    <!-- ========================================================= -->
+    <div id="welcomePopup" class="fixed inset-0 z-[9500] hidden items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 transition-all">
+        <div class="glass-panel max-w-xl w-full rounded-3xl p-6 sm:p-8 border-2 border-cyan-400/50 shadow-2xl relative overflow-hidden text-center space-y-5">
+            <!-- Dekorasi Cahaya Latar -->
+            <div class="absolute -top-16 -right-16 w-40 h-40 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="absolute -bottom-16 -left-16 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+            <!-- Badge Identitas Kreator -->
+            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-xs font-semibold">
+                <i class="fa-solid fa-sparkles"></i>
+                <span>Karya: Vera Putri Nurhandayani • UPTD SDN 1 Bandanhurip</span>
+            </div>
+
+            <!-- Ikon & Judul Sambutan -->
+            <div class="space-y-2">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 mx-auto flex items-center justify-center text-white text-3xl shadow-lg shadow-cyan-500/30 border border-cyan-300/40">
+                    <i class="fa-solid fa-hand-sparkles"></i>
+                </div>
+                <h2 class="font-game text-2xl sm:text-3xl text-white pt-1">
+                    Selamat Datang di GeoMotion 3D!
+                </h2>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+                    Game edukasi Matematika materi <strong>Bangun Ruang</strong> dengan teknologi pembaca gerakan tangan (<em>Motion & Hand Sensor</em>) untuk Papan Interaktif Digital, Tablet, Laptop, dan HP.
+                </p>
+            </div>
+
+            <!-- Ringkasan Fitur / Cara Bermain di Pop-Up -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-left">
+                <div class="bg-slate-900/90 p-3 rounded-2xl border border-slate-700/80 flex sm:flex-col items-center sm:items-start gap-3 sm:gap-1.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-base shrink-0">
+                        <i class="fa-solid fa-video"></i>
+                    </div>
+                    <div>
+                        <div class="font-game text-xs sm:text-sm text-white font-semibold">1. Sensor Gerak</div>
+                        <p class="text-[11px] text-slate-400 leading-snug">Lambaikan tangan di depan kamera untuk memilih Zona A/B/C/D.</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/90 p-3 rounded-2xl border border-slate-700/80 flex sm:flex-col items-center sm:items-start gap-3 sm:gap-1.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-base shrink-0">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                    </div>
+                    <div>
+                        <div class="font-game text-xs sm:text-sm text-white font-semibold">2. Layar Sentuh</div>
+                        <p class="text-[11px] text-slate-400 leading-snug">Mendukung sentuhan langsung di Smartboard, iPad, Tablet & HP.</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/90 p-3 rounded-2xl border border-slate-700/80 flex sm:flex-col items-center sm:items-start gap-3 sm:gap-1.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base shrink-0">
+                        <i class="fa-solid fa-bullseye"></i>
+                    </div>
+                    <div>
+                        <div class="font-game text-xs sm:text-sm text-white font-semibold">3. Materi & 3D</div>
+                        <p class="text-[11px] text-slate-400 leading-snug">Dilengkapi Tujuan Pembelajaran & Lab Putar Bangun Ruang 3D.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tombol Aksi Mulai pada Pop-Up Awal -->
+            <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                <button onclick="startWithCameraFromPopup()" class="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-game text-sm sm:text-base font-semibold shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition transform active:scale-95 border border-emerald-300/40">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>Mulai + Aktifkan Sensor Kamera</span>
+                </button>
+                <button onclick="closeWelcomePopup()" class="py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-game text-sm sm:text-base font-semibold border border-cyan-500/30 flex items-center justify-center gap-2 transition transform active:scale-95">
+                    <i class="fa-solid fa-play"></i>
+                    <span>Mulai Mode Sentuh</span>
+                </button>
+            </div>
+
+            <div class="pt-1">
+                <button onclick="openTujuanFromPopup()" class="text-xs text-slate-400 hover:text-cyan-300 underline underline-offset-4 transition">
+                    <i class="fa-solid fa-book-open mr-1"></i>Lihat Tujuan Pembelajaran Terlebih Dahulu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KURSOR SENSOR VIRTUAL (Terlihat bergerak mengikuti tangan/sentuhan) -->
+    <div id="virtualCursor" class="virtual-cursor hidden">
+        <div class="relative flex items-center justify-center">
+            <!-- Lingkaran Loading Dwell (Ketika menahan tangan di atas tombol) -->
+            <svg class="w-20 h-20 -rotate-90 transform" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" stroke="rgba(56, 189, 248, 0.3)" stroke-width="6" fill="rgba(15, 23, 42, 0.5)" />
+                <circle id="cursorProgress" cx="50" cy="50" r="40" stroke="#22d3ee" stroke-width="8" fill="transparent" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round" />
+            </svg>
+            <!-- Ikon Tangan / Target Sensor di Tengah -->
+            <div class="absolute flex flex-col items-center justify-center text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,1)]">
+                <i class="fa-solid fa-hand-sparkles text-2xl"></i>
+                <span id="cursorCoord" class="text-[9px] font-mono bg-slate-900/90 px-1 rounded text-cyan-400 mt-0.5">X:0 Y:0</span>
+            </div>
+            <!-- Crosshair HUD -->
+            <div class="absolute w-24 h-0.5 bg-cyan-400/40"></div>
+            <div class="absolute h-24 w-0.5 bg-cyan-400/40"></div>
+        </div>
+    </div>
+
+    <!-- HEADER UTAMA / HUD BAR -->
+    <header class="glass-panel sticky top-0 z-40 px-4 py-2.5 border-b border-cyan-500/30 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <!-- Logo & Judul -->
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 border border-cyan-300/40">
+                    <i class="fa-solid fa-cubes text-white text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg md:text-xl font-bold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+                            GeoMotion 3D
+                        </h1>
+                        <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                            Vision Sensor v2.5
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Media Interaktif Bangun Ruang • Smartboard, Tablet, Laptop & HP</p>
+                </div>
+            </div>
+
+            <!-- Status Sensor & Tombol Navigasi Cepat -->
+            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <!-- Indikator Status Sensor -->
+                <div id="sensorStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs">
+                    <span id="sensorDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    <span id="sensorStatusText" class="font-medium text-slate-200">Sensor Siaga</span>
+                </div>
+
+                <!-- Tombol Toggle Kamera Sensor -->
+                <button id="btnToggleCamera" onclick="toggleCameraSensor()" class="sensor-target flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm shadow-md transition transform active:scale-95 border border-emerald-400/40">
+                    <i class="fa-solid fa-video"></i>
+                    <span id="btnCameraLabel">Aktifkan Sensor Kamera</span>
+                </button>
+
+                <!-- Tombol Tujuan Pembelajaran -->
+                <button onclick="switchTab('tujuan')" class="sensor-target flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 text-xs sm:text-sm font-medium transition">
+                    <i class="fa-solid fa-bullseye"></i>
+                    <span class="hidden md:inline">Tujuan Pembelajaran</span>
+                </button>
+
+                <!-- Tombol Suara -->
+                <button id="btnAudio" onclick="toggleAudio()" class="sensor-target w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-600" title="Suara Efek">
+                    <i id="audioIcon" class="fa-solid fa-volume-high text-cyan-400"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex flex-col gap-4">
+
+        <!-- NAVIGASI MODE UTAMA (Cocok untuk Papan Interaktif Digital & Tablet) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <button onclick="switchTab('game')" id="tabBtn-game" class="sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white border border-cyan-300/50">
+                <i class="fa-solid fa-hand-fist text-lg"></i>
+                <span>1. Game Tangkap Gerak</span>
+            </button>
+            <button onclick="switchTab('lab3d')" id="tabBtn-lab3d" class="sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700">
+                <i class="fa-solid fa-cube text-lg text-amber-400"></i>
+                <span>2. Lab Putar 3D</span>
+            </button>
+            <button onclick="switchTab('tujuan')" id="tabBtn-tujuan" class="sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700">
+                <i class="fa-solid fa-graduation-cap text-lg text-emerald-400"></i>
+                <span>3. Tujuan & Materi</span>
+            </button>
+            <button onclick="switchTab('panduan')" id="tabBtn-panduan" class="sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700">
+                <i class="fa-solid fa-satellite-dish text-lg text-purple-400"></i>
+                <span>4. Kalibrasi Sensor</span>
+            </button>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- PANEL 1 & 2: AREA INTERAKTIF UTAMA (GAME & SENSOR KAMERA) -->
+        <!-- ========================================================= -->
+        <div id="interactiveWorkspace" class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+
+            <!-- KOLOM KIRI: MONITOR SENSOR VISUAL (TERLIHAT SENSORNYA SECARA JELAS) -->
+            <div class="lg:col-span-5 flex flex-col gap-3">
+                <div class="glass-panel rounded-3xl p-3.5 border border-cyan-500/40 neon-border flex flex-col h-full justify-between relative overflow-hidden">
+                    
+                    <!-- Header Radar Sensor -->
+                    <div class="flex items-center justify-between mb-2 z-10">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></span>
+                            <h2 class="font-game text-base sm:text-lg text-cyan-300 tracking-wide flex items-center gap-2">
+                                <i class="fa-solid fa-eye"></i> LAYAR PEMBACA SENSOR GERAK
+                            </h2>
+                        </div>
+                        <span id="sensorModeLabel" class="text-[11px] font-mono bg-slate-900/90 text-cyan-300 px-2.5 py-1 rounded-lg border border-cyan-500/30">
+                            MODE: SENTUH / SIMULASI
+                        </span>
+                    </div>
+
+                    <!-- Layar Kamera + Overlay Sensor Kerangka Tangan & Grid -->
+                    <div id="sensorViewport" class="relative w-full aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden border-2 border-cyan-500/50 shadow-inner flex items-center justify-center">
+                        <!-- Efek Garis Pemindai (Scanline) -->
+                        <div class="scanline-effect"></div>
+
+                        <!-- Elemen Video Kamera Asli (Disembunyikan dan digambar ke Canvas agar bisa di-mirror + diberi HUD) -->
+                        <video id="webcamVideo" class="hidden" playsinline muted></video>
+
+                        <!-- Canvas Utama untuk Menampilkan Video + Kerangka Sensor Tangan + Titik Panas Gerakan -->
+                        <canvas id="sensorCanvas" class="w-full h-full object-cover cursor-crosshair"></canvas>
+
+                        <!-- Canvas Kecil Tersembunyi untuk Pemrosesan Perbedaan Frame (Optical Motion Detection) -->
+                        <canvas id="motionDiffCanvas" width="64" height="48" class="hidden"></canvas>
+
+                        <!-- Overlay HUD Sudut Layar Sensor -->
+                        <div class="absolute top-2 left-2 pointer-events-none flex flex-col gap-1 bg-slate-950/75 px-2.5 py-1.5 rounded-xl border border-cyan-500/30 text-[11px] font-mono text-cyan-300">
+                            <div>TRACKING: <span id="hudTrackingState" class="text-emerald-400 font-bold">AKTIF</span></div>
+                            <div>KOORDINAT: <span id="hudCoords">X: 50% | Y: 50%</span></div>
+                            <div>INTENSITAS GERAK: <span id="hudMotionVal">0%</span></div>
+                        </div>
+
+                        <!-- Indikator Zona Tangkapan Tangan (4 Kuadran Jawaban A, B, C, D) -->
+                        <div id="sensorQuadrantsOverlay" class="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-2 p-3 pointer-events-none">
+                            <div id="quad-0" class="border-2 border-dashed border-cyan-400/40 rounded-xl flex flex-col justify-between p-2 transition-all bg-cyan-950/15">
+                                <span class="self-start px-2 py-0.5 rounded bg-cyan-500/80 text-slate-950 font-bold text-xs">ZONA A (Kiri Atas)</span>
+                                <span id="quadText-0" class="text-xs sm:text-sm font-bold text-white drop-shadow bg-slate-900/80 px-2 py-1 rounded-lg self-center text-center">Kubus</span>
+                            </div>
+                            <div id="quad-1" class="border-2 border-dashed border-amber-400/40 rounded-xl flex flex-col justify-between p-2 transition-all bg-amber-950/15">
+                                <span class="self-end px-2 py-0.5 rounded bg-amber-400/90 text-slate-950 font-bold text-xs">ZONA B (Kanan Atas)</span>
+                                <span id="quadText-1" class="text-xs sm:text-sm font-bold text-white drop-shadow bg-slate-900/80 px-2 py-1 rounded-lg self-center text-center">Balok</span>
+                            </div>
+                            <div id="quad-2" class="border-2 border-dashed border-emerald-400/40 rounded-xl flex flex-col justify-between p-2 transition-all bg-emerald-950/15">
+                                <span id="quadText-2" class="text-xs sm:text-sm font-bold text-white drop-shadow bg-slate-900/80 px-2 py-1 rounded-lg self-center text-center mt-auto mb-1">Tabung</span>
+                                <span class="self-start px-2 py-0.5 rounded bg-emerald-400/90 text-slate-950 font-bold text-xs">ZONA C (Kiri Bawah)</span>
+                            </div>
+                            <div id="quad-3" class="border-2 border-dashed border-rose-400/40 rounded-xl flex flex-col justify-between p-2 transition-all bg-rose-950/15">
+                                <span id="quadText-3" class="text-xs sm:text-sm font-bold text-white drop-shadow bg-slate-900/80 px-2 py-1 rounded-lg self-center text-center mt-auto mb-1">Kerucut</span>
+                                <span class="self-end px-2 py-0.5 rounded bg-rose-400/90 text-slate-950 font-bold text-xs">ZONA D (Kanan Bawah)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel Kontrol Sensor & Mode Input -->
+                    <div class="mt-3 flex flex-col gap-2">
+                        <div class="flex items-center justify-between text-xs text-slate-300 bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-hand-point-up text-cyan-400 text-base"></i>
+                                <span><strong>Cara Kerja Sensor:</strong> Lambaikan tangan di depan kamera atau gerakkan jari di layar radar untuk menahan kursor di Zona A/B/C/D!</span>
+                            </div>
+                        </div>
+
+                        <!-- Bar Sensitivitas & Mode Tracking -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setSensorMethod('skeleton')" id="btnMethodSkeleton" class="py-2 px-3 rounded-xl text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-hand"></i> Sensor Jari & Gerak (AI + Grid)
+                            </button>
+                            <button onclick="triggerDemoWave()" class="py-2 px-3 rounded-xl text-xs font-semibold bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-400/40 flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Uji Simulasi Sensor Otomatis
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KOLOM KANAN: AREA GAME / LAB 3D BANGUN RUANG -->
+            <div class="lg:col-span-7 flex flex-col">
+                
+                <!-- SUB-VIEW A: GAME TANGKAP GERAK BANGUN RUANG -->
+                <div id="view-game" class="glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/80 flex flex-col justify-between h-full gap-4">
+                    
+                    <!-- Bar Informasi Skor, Level, Nyawa & Timer -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-2.5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-star"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] text-slate-400 uppercase font-semibold">Skor Poin</div>
+                                <div id="scoreDisplay" class="font-game text-xl text-amber-400 font-bold">0</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-2.5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-layer-group"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] text-slate-400 uppercase font-semibold">Soal / Tantangan</div>
+                                <div id="questionCounter" class="font-game text-xl text-cyan-300 font-bold">1 / 10</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-2.5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-bolt"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] text-slate-400 uppercase font-semibold">Combo Benar</div>
+                                <div id="streakDisplay" class="font-game text-xl text-emerald-400 font-bold">0x</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-2.5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-sliders"></i>
+                            </div>
+                            <div class="w-full">
+                                <div class="text-[11px] text-slate-400 uppercase font-semibold">Tingkat Kesulitan</div>
+                                <select id="levelSelect" onchange="changeDifficulty()" class="bg-transparent font-game text-sm text-purple-300 font-bold focus:outline-none w-full cursor-pointer">
+                                    <option value="all" class="bg-slate-900">Semua Level</option>
+                                    <option value="dasar" class="bg-slate-900">Level 1: Unsur & Sifat</option>
+                                    <option value="menengah" class="bg-slate-900">Level 2: Jaring & Rumus</option>
+                                    <option value="lanjut" class="bg-slate-900">Level 3: Hitung Volume/Luas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panggung 3D Objek Soal & Pertanyaan Interaktif -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800 relative">
+                        
+                        <!-- Visualisasi 3D Bangun Ruang yang Berputar & Bereaksi Terhadap Gerakan Tangan -->
+                        <div class="md:col-span-5 flex flex-col items-center">
+                            <div class="relative w-full h-48 sm:h-56 bg-gradient-to-b from-indigo-950/80 to-slate-950 rounded-2xl border border-indigo-500/30 overflow-hidden flex items-center justify-center">
+                                <div id="threeGameContainer" class="w-full h-full"></div>
+                                <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center px-2 py-1 rounded-lg bg-slate-950/70 text-[11px] text-indigo-300 pointer-events-none">
+                                    <span><i class="fa-solid fa-arrows-rotate mr-1"></i>Ikut Gerak Sensor</span>
+                                    <span id="shapeBadgeName" class="font-bold text-cyan-300">Bangun 3D</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kotak Pertanyaan & Petunjuk Rumus -->
+                        <div class="md:col-span-7 flex flex-col justify-between h-full gap-3">
+                            <div>
+                                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
+                                    <i class="fa-solid fa-circle-question"></i>
+                                    <span id="questionCategory">Identifikasi Unsur Bangun Ruang</span>
+                                </div>
+                                <h3 id="questionText" class="font-game text-lg sm:text-xl text-white leading-snug">
+                                    Aku adalah bangun ruang yang memiliki 6 sisi berbentuk persegi yang sama luas, 12 rusuk sama panjang, dan 8 titik sudut. Bangun apakah aku?
+                                </h3>
+                            </div>
+
+                            <!-- Kotak Feedback / Penjelasan Interaktif -->
+                            <div id="feedbackBanner" class="hidden p-3 rounded-xl border text-xs sm:text-sm font-medium transition-all"></div>
+
+                            <!-- Bar Waktu Tahan Sensor (Hold-to-Select) -->
+                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span id="dwellStatusText"><i class="fa-solid fa-crosshairs text-cyan-400 mr-1"></i>Arahkan tangan ke Zona A, B, C, atau D (atau klik langsung)</span>
+                                    <span id="dwellPercentText" class="font-mono text-cyan-400 font-bold">0%</span>
+                                </div>
+                                <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="dwellProgressBar" class="h-full bg-gradient-to-r from-cyan-400 via-sky-500 to-indigo-500 transition-all duration-75" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4 TOMBOL JAWABAN BESAR (Bisa disentuh di Smartboard/HP atau dipilih lewat Zona Tangan A/B/C/D) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button onclick="selectAnswer(0)" id="ansBtn-0" class="sensor-option-btn group relative overflow-hidden p-4 rounded-2xl bg-slate-800/90 hover:bg-cyan-950/80 border-2 border-cyan-500/40 hover:border-cyan-400 text-left transition-all flex items-center gap-3.5 shadow-lg active:scale-98">
+                            <div class="w-11 h-11 rounded-xl bg-cyan-500 text-slate-950 font-game font-bold text-xl flex items-center justify-center shrink-0 shadow-md group-hover:scale-110 transition">
+                                A
+                            </div>
+                            <div class="flex-grow">
+                                <div class="text-[11px] text-cyan-400 font-semibold uppercase tracking-wider">Zona Sensor Kiri Atas</div>
+                                <div id="ansText-0" class="font-game text-base sm:text-lg text-white font-semibold">Kubus</div>
+                            </div>
+                        </button>
+
+                        <button onclick="selectAnswer(1)" id="ansBtn-1" class="sensor-option-btn group relative overflow-hidden p-4 rounded-2xl bg-slate-800/90 hover:bg-amber-950/80 border-2 border-amber-500/40 hover:border-amber-400 text-left transition-all flex items-center gap-3.5 shadow-lg active:scale-98">
+                            <div class="w-11 h-11 rounded-xl bg-amber-400 text-slate-950 font-game font-bold text-xl flex items-center justify-center shrink-0 shadow-md group-hover:scale-110 transition">
+                                B
+                            </div>
+                            <div class="flex-grow">
+                                <div class="text-[11px] text-amber-400 font-semibold uppercase tracking-wider">Zona Sensor Kanan Atas</div>
+                                <div id="ansText-1" class="font-game text-base sm:text-lg text-white font-semibold">Balok</div>
+                            </div>
+                        </button>
+
+                        <button onclick="selectAnswer(2)" id="ansBtn-2" class="sensor-option-btn group relative overflow-hidden p-4 rounded-2xl bg-slate-800/90 hover:bg-emerald-950/80 border-2 border-emerald-500/40 hover:border-emerald-400 text-left transition-all flex items-center gap-3.5 shadow-lg active:scale-98">
+                            <div class="w-11 h-11 rounded-xl bg-emerald-400 text-slate-950 font-game font-bold text-xl flex items-center justify-center shrink-0 shadow-md group-hover:scale-110 transition">
+                                C
+                            </div>
+                            <div class="flex-grow">
+                                <div class="text-[11px] text-emerald-400 font-semibold uppercase tracking-wider">Zona Sensor Kiri Bawah</div>
+                                <div id="ansText-2" class="font-game text-base sm:text-lg text-white font-semibold">Tabung</div>
+                            </div>
+                        </button>
+
+                        <button onclick="selectAnswer(3)" id="ansBtn-3" class="sensor-option-btn group relative overflow-hidden p-4 rounded-2xl bg-slate-800/90 hover:bg-rose-950/80 border-2 border-rose-500/40 hover:border-rose-400 text-left transition-all flex items-center gap-3.5 shadow-lg active:scale-98">
+                            <div class="w-11 h-11 rounded-xl bg-rose-400 text-slate-950 font-game font-bold text-xl flex items-center justify-center shrink-0 shadow-md group-hover:scale-110 transition">
+                                D
+                            </div>
+                            <div class="flex-grow">
+                                <div class="text-[11px] text-rose-400 font-semibold uppercase tracking-wider">Zona Sensor Kanan Bawah</div>
+                                <div id="ansText-3" class="font-game text-base sm:text-lg text-white font-semibold">Kerucut</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Kontrol Bawah Game -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800">
+                        <button onclick="showHint()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-2 border border-amber-500/30">
+                            <i class="fa-solid fa-lightbulb"></i> Tampilkan Rumus / Petunjuk
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="nextQuestion()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow">
+                                <span>Soal Berikutnya</span>
+                                <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                            <button onclick="resetGame()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 text-xs sm:text-sm font-medium border border-slate-700">
+                                <i class="fa-solid fa-rotate-right"></i> Ulang
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW B: LABORATORIUM EKSPLORASI 3D DENGAN GERAKAN TANGAN -->
+                <div id="view-lab3d" class="hidden glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/80 flex-col justify-between h-full gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="font-game text-xl text-amber-300 flex items-center gap-2">
+                                <i class="fa-solid fa-cubes-stacked"></i> Laboratorium Manipulasi Bangun Ruang 3D
+                            </h2>
+                            <p class="text-xs text-slate-300">Gerakkan tangan di depan sensor kamera (atau geser di layar) untuk memutar bangun ruang 360° dan mempelajari rumusnya!</p>
+                        </div>
+                        <button onclick="toggleWireframeLab()" class="px-3 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-xs font-semibold">
+                            <i class="fa-solid fa-border-all mr-1"></i> Mode Rangka Rusuk (Wireframe)
+                        </button>
+                    </div>
+
+                    <!-- Pilihan Bangun Ruang -->
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        <button onclick="selectLabShape('kubus')" id="labBtn-kubus" class="py-2 px-2 rounded-xl bg-cyan-600 text-white font-game text-xs sm:text-sm font-semibold border border-cyan-300">Kubus</button>
+                        <button onclick="selectLabShape('balok')" id="labBtn-balok" class="py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700">Balok</button>
+                        <button onclick="selectLabShape('tabung')" id="labBtn-tabung" class="py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700">Tabung</button>
+                        <button onclick="selectLabShape('kerucut')" id="labBtn-kerucut" class="py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700">Kerucut</button>
+                        <button onclick="selectLabShape('limas')" id="labBtn-limas" class="py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700">Limas Segi-4</button>
+                        <button onclick="selectLabShape('bola')" id="labBtn-bola" class="py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700">Bola</button>
+                    </div>
+
+                    <!-- Detail Spesifikasi Bangun Ruang -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+                        <div class="space-y-2">
+                            <h3 id="labShapeTitle" class="font-game text-2xl text-cyan-300">Kubus</h3>
+                            <p id="labShapeDesc" class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                                Bangun ruang tiga dimensi yang dibatasi oleh enam bidang sisi yang kongruen berbentuk bujur sangkar (persegi).
+                            </p>
+                            <div class="grid grid-cols-3 gap-2 pt-2">
+                                <div class="bg-slate-800/90 p-2.5 rounded-xl text-center border border-slate-700">
+                                    <div class="text-[11px] text-slate-400">Jumlah Sisi</div>
+                                    <div id="labSisi" class="font-game text-lg text-emerald-400 font-bold">6</div>
+                                </div>
+                                <div class="bg-slate-800/90 p-2.5 rounded-xl text-center border border-slate-700">
+                                    <div class="text-[11px] text-slate-400">Jumlah Rusuk</div>
+                                    <div id="labRusuk" class="font-game text-lg text-amber-400 font-bold">12</div>
+                                </div>
+                                <div class="bg-slate-800/90 p-2.5 rounded-xl text-center border border-slate-700">
+                                    <div class="text-[11px] text-slate-400">Titik Sudut</div>
+                                    <div id="labSudut" class="font-game text-lg text-purple-400 font-bold">8</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col justify-between bg-slate-950/90 p-3.5 rounded-xl border border-indigo-500/30">
+                            <div>
+                                <div class="text-xs font-semibold text-indigo-300 uppercase mb-2"><i class="fa-solid fa-square-root-variable mr-1"></i>Rumus Matematika</div>
+                                <div class="space-y-2 text-xs sm:text-sm">
+                                    <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
+                                        <span class="text-slate-400">Volume (V):</span>
+                                        <span id="labVolumeFormula" class="font-mono font-bold text-cyan-300">V = s × s × s = s³</span>
+                                    </div>
+                                    <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
+                                        <span class="text-slate-400">Luas Permukaan (L):</span>
+                                        <span id="labAreaFormula" class="font-mono font-bold text-amber-300">L = 6 × s²</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-[11px] text-slate-400 flex items-center justify-between">
+                                <span><i class="fa-solid fa-hand-sparkles text-cyan-400 mr-1"></i>Gerakkan tangan ke kiri/kanan/atas/bawah untuk memutar objek 3D di sebelah kiri!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kalkulator Simulasi Cepat Bangun Ruang -->
+                    <div class="bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-semibold text-slate-300">Ukuran Rusuk / Jari-jari (r/s):</span>
+                            <input type="range" id="sizeSlider" min="2" max="20" value="6" oninput="updateCalculatorLab()" class="w-32 sm:w-44 accent-cyan-400 cursor-pointer">
+                            <span id="sliderValText" class="font-mono text-sm font-bold text-cyan-300 bg-slate-800 px-2.5 py-1 rounded-lg">6 cm</span>
+                        </div>
+                        <div class="flex gap-4 text-xs sm:text-sm">
+                            <div>Volume: <strong id="calcVolResult" class="text-emerald-400 font-mono">216 cm³</strong></div>
+                            <div>Luas: <strong id="calcAreaResult" class="text-amber-400 font-mono">216 cm²</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- PANEL 3: TUJUAN PEMBELAJARAN & KURIKULUM BANGUN RUANG     -->
+        <!-- ========================================================= -->
+        <section id="view-tujuan" class="hidden glass-panel rounded-3xl p-5 sm:p-7 border border-emerald-500/40 space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700 pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 text-2xl">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs uppercase tracking-wider font-bold text-emerald-400">Dokumen Kurikulum & Pedagogik</span>
+                        <h2 class="font-game text-2xl sm:text-3xl text-white">Tujuan Pembelajaran Matematika: Bangun Ruang</h2>
+                    </div>
+                </div>
+                <button onclick="switchTab('game')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm shadow-lg flex items-center gap-2">
+                    <i class="fa-solid fa-play"></i> Kembali ke Game Sensor
+                </button>
+            </div>
+
+            <!-- Capaian Pembelajaran (CP) & Tujuan Pembelajaran (TP) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/80 space-y-3">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs font-bold">
+                        <i class="fa-solid fa-compass"></i> CAPAIAN PEMBELAJARAN (CP) GEOMETRI
+                    </div>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        Peserta didik dapat mengidentifikasi, membandingkan, dan menganalisis karakteristik bangun ruang sisi datar (<strong>Kubus, Balok, Prisma, Limas</strong>) dan bangun ruang sisi lengkung (<strong>Tabung, Kerucut, Bola</strong>), serta menentukan luas permukaan dan volumenya untuk menyelesaikan masalah kontekstual sehari-hari melalui eksplorasi visual dan kinestetik.
+                    </p>
+                </div>
+
+                <div class="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/80 space-y-3">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-bold">
+                        <i class="fa-solid fa-person-running"></i> INTEGRASI KINESTETIK & SENSOR GERAK
+                    </div>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        Melalui teknologi <strong>Computer Vision & Motion Sensor</strong> yang tampil secara langsung di layar, peserta didik melatih koordinasi motorik, spasial-visual 3D, serta keaktifan belajar kolaboratif di kelas menggunakan Papan Interaktif Digital (Smartboard), Tablet/iPad, Laptop, maupun Smartphone.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Daftar Rincian Tujuan Pembelajaran (Kognitif, Afektif, Psikomotorik) -->
+            <div>
+                <h3 class="font-game text-lg sm:text-xl text-emerald-300 mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check"></i> Rincian Tujuan Pembelajaran (TP)
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-sm">TP 1</span>
+                        <h4 class="font-game text-base text-white">Identifikasi Unsur Bangun Ruang</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik mampu menyebutkan dan menghitung dengan tepat jumlah <strong>sisi, rusuk, dan titik sudut</strong> pada kubus, balok, prisma, limas, tabung, kerucut, dan bola melalui pengamatan model 3D.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-cyan-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-400 text-slate-950 font-bold flex items-center justify-center text-sm">TP 2</span>
+                        <h4 class="font-game text-base text-white">Analisis Sifat & Jaring-Jaring</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik mampu membedakan sifat bangun ruang sisi datar dan sisi lengkung serta mengaitkan bentuk bangun datar penyusun jaring-jaringnya.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 font-bold flex items-center justify-center text-sm">TP 3</span>
+                        <h4 class="font-game text-base text-white">Perhitungan Volume & Luas Permukaan</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik mampu menerapkan rumus <strong>Volume</strong> dan <strong>Luas Permukaan</strong> bangun ruang untuk menghitung ukuran bangun secara cepat dan tepat.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-purple-400 text-slate-950 font-bold flex items-center justify-center text-sm">TP 4</span>
+                        <h4 class="font-game text-base text-white">Pemecahan Masalah Kontekstual</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik dapat menyelesaikan soal cerita yang berkaitan dengan benda-benda berbentuk bangun ruang di lingkungan sekitar (seperti akuarium, tenda, topi ulang tahun, kaleng susu).
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-rose-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-rose-400 text-slate-950 font-bold flex items-center justify-center text-sm">TP 5</span>
+                        <h4 class="font-game text-base text-white">Keterampilan Spasial & Motorik Sensorik</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik mampu memanipulasi orientasi objek 3D secara langsung menggunakan gerakan tangan yang terbaca oleh sensor visual untuk memahami perspektif ruang tiga dimensi.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-900/90 border border-indigo-500/30 flex flex-col gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-indigo-400 text-slate-950 font-bold flex items-center justify-center text-sm">TP 6</span>
+                        <h4 class="font-game text-base text-white">Kolaborasi Digital Multi-Perangkat</h4>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Peserta didik berpartisipasi aktif dalam kuis interaktif di depan kelas menggunakan Papan Interaktif Digital (Smartboard) maupun secara mandiri di tablet/HP.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- PANEL 4: PANDUAN SENSOR & KOMPATIBILITAS MULTI-PERANGKAT  -->
+        <!-- ========================================================= -->
+        <section id="view-panduan" class="hidden glass-panel rounded-3xl p-5 sm:p-7 border border-purple-500/40 space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700 pb-4">
+                <div>
+                    <h2 class="font-game text-2xl text-purple-300 flex items-center gap-2">
+                        <i class="fa-solid fa-satellite-dish"></i> Panduan Penggunaan Sensor & Multi-Perangkat
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-300">Pengaturan optimal untuk Papan Interaktif Digital (Smartboard/IFP), iPad, Tablet, Laptop, dan Smartphone.</p>
+                </div>
+                <button onclick="switchTab('game')" class="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs sm:text-sm">
+                    Kembali ke Game
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700 space-y-2">
+                    <div class="text-2xl text-cyan-400"><i class="fa-solid fa-chalkboard-user"></i></div>
+                    <h3 class="font-game text-base text-white">1. Papan Interaktif Digital (IFP)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Jika papan interaktif memiliki kamera web di bagian atas, klik <strong>"Aktifkan Sensor Kamera"</strong>. Siswa cukup berdiri di depan papan dan melambaikan tangan ke Zona A, B, C, atau D. Siswa juga bisa langsung menyentuh layar papan.
+                    </p>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700 space-y-2">
+                    <div class="text-2xl text-amber-400"><i class="fa-solid fa-tablet-screen-button"></i></div>
+                    <h3 class="font-game text-base text-white">2. iPad & Tablet Android</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Gunakan kamera depan tablet untuk membaca gerakan tangan tanpa menyentuh layar, atau gunakan sentuhan jari pada layar radar sensor untuk menggerakkan garis laser sensor.
+                    </p>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700 space-y-2">
+                    <div class="text-2xl text-emerald-400"><i class="fa-solid fa-laptop"></i></div>
+                    <h3 class="font-game text-base text-white">3. Laptop / Komputer PC</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Webcam laptop akan mendeteksi <strong>21 titik persendian jari tangan (AI Hand Skeleton)</strong> sekaligus <strong>Optical Motion Grid</strong> (titik-titik hijau/biru yang menyala saat ada gerakan).
+                    </p>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700 space-y-2">
+                    <div class="text-2xl text-rose-400"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                    <h3 class="font-game text-base text-white">4. Smartphone (HP)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Tampilan otomatis menyesuaikan layar vertikal/horizontal. Mendukung kamera depan HP, sensor kemiringan perangkat (gyroscope), maupun sentuhan langsung.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL HASIL AKHIR GAME -->
+    <div id="resultModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 border-2 border-cyan-400/50 text-center space-y-4 shadow-2xl">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 mx-auto flex items-center justify-center text-slate-950 text-4xl shadow-lg">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 class="font-game text-2xl sm:text-3xl text-white">Misi Bangun Ruang Selesai!</h2>
+            <p id="finalMessage" class="text-sm text-slate-300">Luar biasa! Kamu berhasil menyelesaikan tantangan geometri dengan sensor gerak.</p>
+            <div class="grid grid-cols-2 gap-3 bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+                <div>
+                    <div class="text-xs text-slate-400">Skor Akhir</div>
+                    <div id="finalScoreText" class="font-game text-3xl text-amber-400 font-bold">100</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400">Akurasi Jawaban</div>
+                    <div id="finalAccuracyText" class="font-game text-3xl text-emerald-400 font-bold">90%</div>
+                </div>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="closeModalAndRestart()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-game font-semibold shadow-lg">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> Main Lagi
+                </button>
+                <button onclick="closeModalToLab()" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-game font-semibold border border-cyan-500/30">
+                    Buka Lab 3D
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="text-center py-3 px-4 text-xs text-slate-400 border-t border-slate-800/80 glass-panel">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span><strong>GeoMotion 3D</strong> • Pembelajaran Matematika Interaktif Materi Bangun Ruang</span>
+            <span class="flex items-center gap-3">
+                <span><i class="fa-solid fa-check-circle text-emerald-400 mr-1"></i>Smartboard Ready</span>
+                <span><i class="fa-solid fa-check-circle text-cyan-400 mr-1"></i>Hand & Motion Sensor</span>
+                <span><i class="fa-solid fa-check-circle text-amber-400 mr-1"></i>iPad / Tablet / HP</span>
+            </span>
+        </div>
+    </footer>
+
+    <!-- ========================================================= -->
+    <!-- SCRIPT UTAMA: ENGINE 3D, SENSOR GERAK KAMERA & BANK SOAL   -->
+    <!-- ========================================================= -->
+    <script>
+        /**************************************************************
+         * 1. BANK SOAL & DATA MATERI BANGUN RUANG
+         **************************************************************/
+        const shapeDatabase = {
+            kubus: {
+                name: "Kubus",
+                desc: "Bangun ruang sisi datar yang semua sisinya berbentuk persegi sama luas dan semua rusuknya sama panjang.",
+                sisi: "6", rusuk: "12", sudut: "8",
+                volFormula: "V = s × s × s (s³)",
+                areaFormula: "L = 6 × s²",
+                calcVol: (s) => `${Math.pow(s, 3)} cm³`,
+                calcArea: (s) => `${6 * Math.pow(s, 2)} cm²`
+            },
+            balok: {
+                name: "Balok",
+                desc: "Bangun ruang sisi datar yang memiliki 3 pasang sisi berbentuk persegi panjang yang saling berhadapan sama luas.",
+                sisi: "6", rusuk: "12", sudut: "8",
+                volFormula: "V = p × l × t",
+                areaFormula: "L = 2 × (pl + pt + lt)",
+                calcVol: (s) => `${s * (s + 2) * (s - 1)} cm³ (p=${s+2}, l=${s}, t=${s-1})`,
+                calcArea: (s) => `${2 * (s*(s+2) + (s+2)*(s-1) + s*(s-1))} cm²`
+            },
+            tabung: {
+                name: "Tabung (Silinder)",
+                desc: "Bangun ruang sisi lengkung yang dibatasi oleh dua bidang alas dan tutup berbentuk lingkaran serta selimut tabung.",
+                sisi: "3", rusuk: "2 (lengkung)", sudut: "0",
+                volFormula: "V = π × r² × t",
+                areaFormula: "L = 2 × π × r × (r + t)",
+                calcVol: (r) => `${(3.14 * r * r * 10).toFixed(1)} cm³ (t=10)`,
+                calcArea: (r) => `${(2 * 3.14 * r * (r + 10)).toFixed(1)} cm²`
+            },
+            kerucut: {
+                name: "Kerucut",
+                desc: "Bangun ruang sisi lengkung yang memiliki alas berbentuk lingkaran dan satu titik puncak di bagian atas.",
+                sisi: "2", rusuk: "1 (lengkung)", sudut: "1 (puncak)",
+                volFormula: "V = ⅓ × π × r² × t",
+                areaFormula: "L = π × r × (r + s)",
+                calcVol: (r) => `${((1/3) * 3.14 * r * r * 9).toFixed(1)} cm³ (t=9)`,
+                calcArea: (r) => `${(3.14 * r * (r + Math.sqrt(r*r + 81))).toFixed(1)} cm²`
+            },
+            limas: {
+                name: "Limas Segiempat",
+                desc: "Bangun ruang yang alasnya berbentuk segiempat dan sisi-sisi tegaknya berbentuk segitiga yang bertemu di satu titik puncak.",
+                sisi: "5", rusuk: "8", sudut: "5",
+                volFormula: "V = ⅓ × Luas Alas × t",
+                areaFormula: "L = Luas Alas + Jumlah Luas Sisi Tegak",
+                calcVol: (s) => `${((1/3) * s * s * 9).toFixed(0)} cm³ (t=9)`,
+                calcArea: (s) => `${(s * s + 2 * s * 10).toFixed(0)} cm²`
+            },
+            bola: {
+                name: "Bola",
+                desc: "Bangun ruang sisi lengkung sempurna yang semua titik pada permukaannya berjarak sama (jari-jari) terhadap titik pusat.",
+                sisi: "1", rusuk: "0", sudut: "0",
+                volFormula: "V = 4/3 × π × r³",
+                areaFormula: "L = 4 × π × r²",
+                calcVol: (r) => `${((4/3) * 3.14 * Math.pow(r, 3)).toFixed(1)} cm³`,
+                calcArea: (r) => `${(4 * 3.14 * r * r).toFixed(1)} cm²`
+            }
+        };
+
+        const questionBank = [
+            {
+                level: "dasar",
+                shape: "kubus",
+                category: "Identifikasi Unsur Bangun Ruang",
+                question: "Aku memiliki 6 sisi berbentuk persegi yang sama luas, 12 rusuk sama panjang, dan 8 titik sudut. Bangun ruang apakah aku?",
+                options: ["Kubus", "Balok", "Limas Segiempat", "Tabung"],
+                correct: 0,
+                hint: "Semua sisinya berbentuk persegi yang kongruen (sama persis)."
+            },
+            {
+                level: "dasar",
+                shape: "tabung",
+                category: "Bangun Ruang Sisi Lengkung",
+                question: "Bangun ruang apakah yang memiliki 3 sisi (alas lingkaran, tutup lingkaran, dan selimut) serta tidak memiliki titik sudut?",
+                options: ["Kerucut", "Tabung", "Bola", "Prisma Segitiga"],
+                correct: 1,
+                hint: "Bentuknya seperti kaleng susu atau drum minyak."
+            },
+            {
+                level: "dasar",
+                shape: "limas",
+                category: "Unsur Rusuk & Titik Sudut",
+                question: "Berapakah jumlah sisi dan jumlah rusuk yang dimiliki oleh bangun ruang Limas Segiempat?",
+                options: ["6 sisi dan 12 rusuk", "5 sisi dan 8 rusuk", "4 sisi dan 6 rusuk", "5 sisi dan 10 rusuk"],
+                correct: 1,
+                hint: "Alasnya memiliki 4 rusuk, ditambah 4 rusuk tegak yang menuju puncak."
+            },
+            {
+                level: "dasar",
+                shape: "kerucut",
+                category: "Karakteristik Bangun Ruang",
+                question: "Topi ulang tahun dan nasi tumpeng merupakan contoh benda sehari-hari yang berbentuk...",
+                options: ["Limas Segitiga", "Tabung", "Bola", "Kerucut"],
+                correct: 3,
+                hint: "Memiliki alas berbentuk lingkaran dan 1 titik puncak."
+            },
+            {
+                level: "menengah",
+                shape: "kubus",
+                category: "Rumus Bangun Ruang",
+                question: "Manakah rumus yang tepat untuk menghitung Luas Permukaan (L) sebuah Kubus yang panjang rusuknya s?",
+                options: ["L = s × s × s", "L = 4 × s²", "L = 6 × s²", "L = 12 × s"],
+                correct: 2,
+                hint: "Kubus memiliki 6 bidang sisi berbentuk persegi yang masing-masing luasnya s²."
+            },
+            {
+                level: "menengah",
+                shape: "balok",
+                category: "Unsur & Jaring-Jaring",
+                question: "Sebuah Balok memiliki ukuran panjang (p), lebar (l), dan tinggi (t). Rumus untuk mencari Volume Balok adalah...",
+                options: ["V = p + l + t", "V = 2 × (pl + pt + lt)", "V = p × l × t", "V = ⅓ × p × l × t"],
+                correct: 2,
+                hint: "Volume prisma/balok adalah Luas Alas (p × l) dikalikan tinggi (t)."
+            },
+            {
+                level: "menengah",
+                shape: "bola",
+                category: "Bangun Ruang Sisi Lengkung",
+                question: "Berapa banyak titik sudut dan rusuk yang dimiliki oleh bangun ruang Bola?",
+                options: ["1 titik sudut dan 1 rusuk", "0 titik sudut dan 0 rusuk", "0 titik sudut dan 1 rusuk", "Tak terhingga rusuk"],
+                correct: 1,
+                hint: "Bola hanya memiliki 1 sisi lengkung penuh tanpa rusuk maupun sudut."
+            },
+            {
+                level: "lanjut",
+                shape: "kubus",
+                category: "Perhitungan Volume",
+                question: "Sebuah akuarium berbentuk Kubus memiliki panjang rusuk 5 dm. Berapakah Volume air maksimal di dalamnya?",
+                options: ["25 dm³", "100 dm³", "125 dm³", "150 dm³"],
+                correct: 2,
+                hint: "Gunakan rumus V = s × s × s = 5 × 5 × 5."
+            },
+            {
+                level: "lanjut",
+                shape: "balok",
+                category: "Pemecahan Masalah Kontekstual",
+                question: "Sebuah kotak kado berbentuk Balok berukuran panjang 10 cm, lebar 6 cm, dan tinggi 5 cm. Berapa Volume kotak tersebut?",
+                options: ["300 cm³", "210 cm³", "150 cm³", "280 cm³"],
+                correct: 0,
+                hint: "Kalikan panjang × lebar × tinggi (10 × 6 × 5)."
+            },
+            {
+                level: "lanjut",
+                shape: "limas",
+                category: "Perhitungan Volume Limas",
+                question: "Sebuah Limas Segiempat memiliki luas alas 30 cm² dan tinggi 6 cm. Berapakah Volume limas tersebut?",
+                options: ["180 cm³", "90 cm³", "60 cm³", "36 cm³"],
+                correct: 2,
+                hint: "Rumus Volume Limas: V = ⅓ × Luas Alas × tinggi = ⅓ × 30 × 6."
+            }
+        ];
+
+        /**************************************************************
+         * 2. STATE APLIKASI & GAME
+         **************************************************************/
+        let currentTab = 'game';
+        let filteredQuestions = [...questionBank];
+        let currentQIndex = 0;
+        let score = 0;
+        let streak = 0;
+        let correctCount = 0;
+        let isAnswered = false;
+        let soundEnabled = true;
+
+        // State Sensor & Tracking
+        let cameraActive = false;
+        let sensorX = 0.5; // Normalisasi 0.0 - 1.0
+        let sensorY = 0.5; // Normalisasi 0.0 - 1.0
+        let targetSensorX = 0.5;
+        let targetSensorY = 0.5;
+        let motionIntensity = 0;
+        let activeQuadrant = -1;
+        let dwellTimer = 0;
+        const DWELL_THRESHOLD = 42; // Sekitar ~1.3 detik menahan tangan di zona jawaban
+        let demoWaveActive = false;
+        let demoAngle = 0;
+
+        // Data titik kerangka tangan (21 titik untuk visualisasi nyata)
+        let detectedHandLandmarks = null;
+        let motionHotspots = []; // Titik-titik grid sensor gerak yang menyala
+
+        /**************************************************************
+         * 3. EFEK SUARA (TONE.JS SYNTH)
+         **************************************************************/
+        let synth = null;
+        function initAudio() {
+            if (!synth && window.Tone) {
+                synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                synth.volume.value = -8;
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled || !window.Tone) return;
+            try {
+                initAudio();
+                if (Tone.context.state !== 'running') {
+                    Tone.context.resume();
+                }
+                const now = Tone.now();
+                if (type === 'correct') {
+                    synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n", now);
+                } else if (type === 'wrong') {
+                    synth.triggerAttackRelease(["F3", "B2"], "4n", now);
+                } else if (type === 'tick') {
+                    synth.triggerAttackRelease(["A5"], "32n", now);
+                } else if (type === 'win') {
+                    synth.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
+                    synth.triggerAttackRelease(["D5", "F5", "A5"], "8n", now + 0.18);
+                    synth.triggerAttackRelease(["E5", "G5", "C6"], "4n", now + 0.36);
+                }
+            } catch (e) {
+                // Abaikan jika browser memblokir autoplay sebelum interaksi pertama
+            }
+        }
+
+        function toggleAudio() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('audioIcon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high text-cyan-400' : 'fa-solid fa-volume-xmark text-rose-400';
+        }
+
+        /**************************************************************
+         * 4. ENGINE 3D BANGUN RUANG (THREE.JS)
+         **************************************************************/
+        let scene, camera, renderer, currentMesh, wireframeMesh;
+        let isWireframeOnly = false;
+
+        function initThreeJS() {
+            const container = document.getElementById('threeGameContainer');
+            const width = container.clientWidth || 300;
+            const height = container.clientHeight || 220;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.innerHTML = '';
+            container.appendChild(renderer.domElement);
+
+            // Pencahayaan 3D
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0x38bdf8, 1.1);
+            dirLight1.position.set(5, 6, 5);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xf43f5e, 0.6);
+            dirLight2.position.set(-5, -4, 2);
+            scene.add(dirLight2);
+
+            build3DShape('kubus');
+
+            window.addEventListener('resize', () => {
+                if (!container) return;
+                const w = container.clientWidth;
+                const h = container.clientHeight;
+                if (w > 0 && h > 0) {
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                }
+            });
+        }
+
+        function build3DShape(shapeType) {
+            if (!scene) return;
+            if (currentMesh) scene.remove(currentMesh);
+            if (wireframeMesh) scene.remove(wireframeMesh);
+
+            let geometry;
+            switch (shapeType) {
+                case 'kubus':
+                    geometry = new THREE.BoxGeometry(2.1, 2.1, 2.1);
+                    break;
+                case 'balok':
+                    geometry = new THREE.BoxGeometry(2.7, 1.6, 1.4);
+                    break;
+                case 'tabung':
+                    geometry = new THREE.CylinderGeometry(1.1, 1.1, 2.3, 32);
+                    break;
+                case 'kerucut':
+                    geometry = new THREE.ConeGeometry(1.3, 2.5, 32);
+                    break;
+                case 'limas':
+                    geometry = new THREE.ConeGeometry(1.5, 2.4, 4);
+                    break;
+                case 'bola':
+                    geometry = new THREE.SphereGeometry(1.45, 32, 32);
+                    break;
+                default:
+                    geometry = new THREE.BoxGeometry(2, 2, 2);
+            }
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x0ea5e9,
+                roughness: 0.25,
+                metalness: 0.2,
+                transparent: true,
+                opacity: isWireframeOnly ? 0.15 : 0.85
+            });
+
+            currentMesh = new THREE.Mesh(geometry, material);
+            scene.add(currentMesh);
+
+            // Garis Rusuk (Edges/Wireframe) agar siswa bisa menghitung rusuk dengan jelas
+            const edges = new THREE.EdgesGeometry(geometry);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x7dd3fc, linewidth: 2 });
+            wireframeMesh = new THREE.LineSegments(edges, lineMat);
+            scene.add(wireframeMesh);
+
+            const badge = document.getElementById('shapeBadgeName');
+            if (badge && shapeDatabase[shapeType]) {
+                badge.textContent = shapeDatabase[shapeType].name;
+            }
+        }
+
+        /**************************************************************
+         * 5. SISTEM SENSOR GERAK (KAMERA WEBRTC + MEDIAPIPE + MOTION GRID)
+         **************************************************************/
+        const videoElement = document.getElementById('webcamVideo');
+        const sensorCanvas = document.getElementById('sensorCanvas');
+        const sensorCtx = sensorCanvas.getContext('2d');
+        const diffCanvas = document.getElementById('motionDiffCanvas');
+        const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
+        let prevFrameData = null;
+        let handsDetector = null;
+        let isProcessingHand = false;
+
+        function initSensorCanvasEvents() {
+            sensorCanvas.width = 480;
+            sensorCanvas.height = 360;
+
+            // Interaksi Mouse & Sentuhan di Layar Sensor (Untuk Smartboard/Tablet/HP)
+            const handlePointer = (clientX, clientY) => {
+                const rect = sensorCanvas.getBoundingClientRect();
+                const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+                const relY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+                targetSensorX = relX;
+                targetSensorY = relY;
+                motionIntensity = 88;
+                demoWaveActive = false;
+
+                // Buat simulasi kerangka tangan visual saat disentuh/digerakkan
+                generateSimulatedSkeleton(relX, relY);
+            };
+
+            sensorCanvas.addEventListener('mousemove', (e) => handlePointer(e.clientX, e.clientY));
+            sensorCanvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 0) {
+                    handlePointer(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            }, { passive: true });
+            sensorCanvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 0) {
+                    handlePointer(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            }, { passive: true });
+        }
+
+        // Membuat titik kerangka tangan 21 sendi agar sensor selalu terlihat nyata
+        function generateSimulatedSkeleton(cx, cy) {
+            const pts = [];
+            // Pergelangan tangan
+            pts.push({ x: cx, y: cy + 0.12 });
+            // 5 Jari terbuka mengikuti posisi kursor tangan
+            const fingerOffsets = [-0.08, -0.04, 0, 0.04, 0.08];
+            fingerOffsets.forEach((offX, idx) => {
+                const len = idx === 2 ? 0.13 : (idx === 0 || idx === 4 ? 0.08 : 0.11);
+                for (let j = 1; j <= 4; j++) {
+                    pts.push({
+                        x: cx + offX * (j / 2.5),
+                        y: cy + 0.10 - (j * len / 3.2)
+                    });
+                }
+            });
+            detectedHandLandmarks = pts;
+        }
+
+        async function toggleCameraSensor() {
+            const btnLabel = document.getElementById('btnCameraLabel');
+            const statusText = document.getElementById('sensorStatusText');
+            const sensorDot = document.getElementById('sensorDot');
+            const modeLabel = document.getElementById('sensorModeLabel');
+
+            if (cameraActive) {
+                // Matikan Kamera
+                cameraActive = false;
+                if (videoElement.srcObject) {
+                    videoElement.srcObject.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                }
+                btnLabel.textContent = "Aktifkan Sensor Kamera";
+                statusText.textContent = "Mode Sentuh / Simulasi";
+                sensorDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping";
+                modeLabel.textContent = "MODE: SENTUH / SIMULASI";
+                return;
+            }
+
+            try {
+                btnLabel.textContent = "Menghubungkan Sensor...";
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                });
+                videoElement.srcObject = stream;
+                await videoElement.play();
+                cameraActive = true;
+                demoWaveActive = false;
+
+                btnLabel.textContent = "Matikan Sensor Kamera";
+                statusText.textContent = "Sensor Kamera Aktif";
+                sensorDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping";
+                modeLabel.textContent = "MODE: KAMERA + AI HAND SENSOR";
+
+                // Inisialisasi MediaPipe Hands jika library termuat
+                initMediaPipeHands();
+            } catch (err) {
+                // Jika perangkat tidak mengizinkan kamera, aktifkan Simulasi Sensor Otomatis
+                cameraActive = false;
+                btnLabel.textContent = "Mode Simulasi Sensor Aktif";
+                statusText.textContent = "Simulasi Sensor Aktif";
+                modeLabel.textContent = "MODE: SIMULASI RADAR OTOMATIS";
+                triggerDemoWave();
+            }
+        }
+
+        function initMediaPipeHands() {
+            if (window.Hands && !handsDetector) {
+                try {
+                    handsDetector = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                    });
+                    handsDetector.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 0,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5
+                    });
+                    handsDetector.onResults((results) => {
+                        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                            const lm = results.multiHandLandmarks[0];
+                            // Mirror koordinat X karena kamera depan dicerminkan
+                            detectedHandLandmarks = lm.map(p => ({ x: 1 - p.x, y: p.y }));
+                            // Gunakan ujung jari telunjuk (indeks 8) atau titik tengah telapak (indeks 9)
+                            const pointer = detectedHandLandmarks[9] || detectedHandLandmarks[8];
+                            targetSensorX = pointer.x;
+                            targetSensorY = pointer.y;
+                            motionIntensity = 95;
+                        }
+                    });
+                } catch (e) {
+                    handsDetector = null;
+                }
+            }
+        }
+
+        // Deteksi Gerakan Optik (Optical Flow / Frame Differencing)
+        // Ini memastikan sensor tetap membaca gerakan tangan walau siswa berdiri agak jauh dari Papan Interaktif!
+        function processOpticalMotion() {
+            if (!cameraActive || videoElement.readyState < 2) return;
+
+            const w = diffCanvas.width;
+            const h = diffCanvas.height;
+
+            // Gambar frame video secara mirror ke canvas kecil
+            diffCtx.save();
+            diffCtx.scale(-1, 1);
+            diffCtx.drawImage(videoElement, -w, 0, w, h);
+            diffCtx.restore();
+
+            const currentFrame = diffCtx.getImageData(0, 0, w, h);
+            const data = currentFrame.data;
+
+            if (prevFrameData) {
+                let sumX = 0, sumY = 0, count = 0;
+                motionHotspots = [];
+
+                for (let y = 0; y < h; y += 2) {
+                    for (let x = 0; x < w; x += 2) {
+                        const i = (y * w + x) * 4;
+                        const rDiff = Math.abs(data[i] - prevFrameData[i]);
+                        const gDiff = Math.abs(data[i + 1] - prevFrameData[i + 1]);
+                        const bDiff = Math.abs(data[i + 2] - prevFrameData[i + 2]);
+                        const diff = (rDiff + gDiff + bDiff) / 3;
+
+                        if (diff > 28) {
+                            sumX += x;
+                            sumY += y;
+                            count++;
+                            if (motionHotspots.length < 120) {
+                                motionHotspots.push({ x: x / w, y: y / h, val: diff });
+                            }
+                        }
+                    }
+                }
+
+                if (count > 8) {
+                    const avgX = (sumX / count) / w;
+                    const avgY = (sumY / count) / h;
+                    targetSensorX = avgX;
+                    targetSensorY = avgY;
+                    motionIntensity = Math.min(100, Math.round((count / (w * h / 8)) * 100));
+
+                    // Jika MediaPipe belum mendeteksi jari dekat, tampilkan kerangka sensor pada pusat gerakan
+                    generateSimulatedSkeleton(avgX, avgY);
+                } else {
+                    motionIntensity = Math.max(0, motionIntensity - 4);
+                }
+            }
+
+            prevFrameData = new Uint8ClampedArray(data);
+
+            // Kirim ke MediaPipe secara berkala jika tersedia
+            if (handsDetector && !isProcessingHand) {
+                isProcessingHand = true;
+                handsDetector.send({ image: videoElement }).finally(() => {
+                    isProcessingHand = false;
+                });
+            }
+        }
+
+        // Gambar Visualisasi Sensor (Grid Radar, Titik Gerak, Kerangka Tangan, dan Target Zona)
+        function renderSensorViewport() {
+            const w = sensorCanvas.width;
+            const h = sensorCanvas.height;
+            sensorCtx.clearRect(0, 0, w, h);
+
+            // 1. Gambar Video Kamera (jika aktif) atau Latar Radar Digital
+            if (cameraActive && videoElement.readyState >= 2) {
+                sensorCtx.save();
+                sensorCtx.scale(-1, 1);
+                sensorCtx.drawImage(videoElement, -w, 0, w, h);
+                sensorCtx.restore();
+                // Beri lapisan filter cyber tipis agar indikator sensor terlihat kontras
+                sensorCtx.fillStyle = "rgba(15, 23, 42, 0.25)";
+                sensorCtx.fillRect(0, 0, w, h);
+            } else {
+                // Background Grid Radar Digital
+                const grad = sensorCtx.createRadialGradient(w/2, h/2, 20, w/2, h/2, w/1.2);
+                grad.addColorStop(0, "#0f172a");
+                grad.addColorStop(1, "#020617");
+                sensorCtx.fillStyle = grad;
+                sensorCtx.fillRect(0, 0, w, h);
+            }
+
+            // 2. Gambar Grid Sensor Matriks
+            sensorCtx.strokeStyle = "rgba(56, 189, 248, 0.18)";
+            sensorCtx.lineWidth = 1;
+            const step = 30;
+            for (let x = 0; x < w; x += step) {
+                sensorCtx.beginPath();
+                sensorCtx.moveTo(x, 0);
+                sensorCtx.lineTo(x, h);
+                sensorCtx.stroke();
+            }
+            for (let y = 0; y < h; y += step) {
+                sensorCtx.beginPath();
+                sensorCtx.moveTo(0, y);
+                sensorCtx.lineTo(w, y);
+                sensorCtx.stroke();
+            }
+
+            // 3. Gambar Titik-Titik Panas Sensor Gerakan (Motion Hotspots)
+            motionHotspots.forEach(spot => {
+                sensorCtx.fillStyle = "rgba(52, 211, 153, 0.75)";
+                sensorCtx.beginPath();
+                sensorCtx.arc(spot.x * w, spot.y * h, 4, 0, Math.PI * 2);
+                sensorCtx.fill();
+            });
+
+            // 4. Haluskan Pergerakan Koordinat Sensor
+            if (demoWaveActive) {
+                demoAngle += 0.03;
+                targetSensorX = 0.5 + Math.cos(demoAngle) * 0.28;
+                targetSensorY = 0.5 + Math.sin(demoAngle * 0.7) * 0.28;
+                motionIntensity = 75 + Math.round(Math.sin(demoAngle * 3) * 20);
+                generateSimulatedSkeleton(targetSensorX, targetSensorY);
+            }
+
+            sensorX += (targetSensorX - sensorX) * 0.22;
+            sensorY += (targetSensorY - sensorY) * 0.22;
+
+            const px = sensorX * w;
+            const py = sensorY * h;
+
+            // 5. Gambar Kerangka Tangan Sensor (21 Titik & Garis Penghubung)
+            if (detectedHandLandmarks && detectedHandLandmarks.length > 5) {
+                sensorCtx.strokeStyle = "#22d3ee";
+                sensorCtx.lineWidth = 2.5;
+                const wrist = detectedHandLandmarks[0];
+                for (let i = 1; i < detectedHandLandmarks.length; i++) {
+                    const pt = detectedHandLandmarks[i];
+                    sensorCtx.beginPath();
+                    if (i % 4 === 1) {
+                        sensorCtx.moveTo(wrist.x * w, wrist.y * h);
+                    } else {
+                        const prev = detectedHandLandmarks[i - 1];
+                        sensorCtx.moveTo(prev.x * w, prev.y * h);
+                    }
+                    sensorCtx.lineTo(pt.x * w, pt.y * h);
+                    sensorCtx.stroke();
+                }
+
+                // Gambar Titik Sendi Jari
+                detectedHandLandmarks.forEach((pt, idx) => {
+                    sensorCtx.fillStyle = idx % 4 === 0 ? "#f43f5e" : "#38bdf8";
+                    sensorCtx.beginPath();
+                    sensorCtx.arc(pt.x * w, pt.y * h, idx % 4 === 0 ? 5 : 3.5, 0, Math.PI * 2);
+                    sensorCtx.fill();
+                });
+            }
+
+            // 6. Gambar Reticle / Lingkaran Sensor Utama pada Posisi Tangan
+            sensorCtx.strokeStyle = "#38bdf8";
+            sensorCtx.lineWidth = 2.5;
+            sensorCtx.beginPath();
+            sensorCtx.arc(px, py, 22, 0, Math.PI * 2);
+            sensorCtx.stroke();
+
+            // Lingkaran Progress Pemilihan (Dwell Ring) di dalam Canvas Sensor
+            if (dwellTimer > 0) {
+                const progressAngle = (dwellTimer / DWELL_THRESHOLD) * (Math.PI * 2);
+                sensorCtx.strokeStyle = "#10b981";
+                sensorCtx.lineWidth = 5;
+                sensorCtx.beginPath();
+                sensorCtx.arc(px, py, 27, -Math.PI / 2, -Math.PI / 2 + progressAngle);
+                sensorCtx.stroke();
+            }
+
+            // Garis Laser Koordinat X & Y
+            sensorCtx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+            sensorCtx.setLineDash([5, 5]);
+            sensorCtx.beginPath();
+            sensorCtx.moveTo(px, 0);
+            sensorCtx.lineTo(px, h);
+            sensorCtx.moveTo(0, py);
+            sensorCtx.lineTo(w, py);
+            sensorCtx.stroke();
+            sensorCtx.setLineDash([]);
+
+            // Update Teks HUD Sensor
+            document.getElementById('hudCoords').textContent = `X: ${Math.round(sensorX * 100)}% | Y: ${Math.round(sensorY * 100)}%`;
+            document.getElementById('hudMotionVal').textContent = `${motionIntensity}%`;
+
+            // Evaluasi Kuadran Jawaban (Zona A, B, C, D)
+            evaluateSensorQuadrant();
+        }
+
+        function evaluateSensorQuadrant() {
+            if (currentTab !== 'game' || isAnswered) {
+                resetDwellUI();
+                return;
+            }
+
+            // Tentukan tangan berada di kuadran mana (0: Kiri Atas, 1: Kanan Atas, 2: Kiri Bawah, 3: Kanan Bawah)
+            // Zona tengah (0.42 - 0.58) dibuat netral agar siswa punya area istirahat tangan
+            let detectedQuad = -1;
+            const isNeutralCenter = (sensorX > 0.43 && sensorX < 0.57 && sensorY > 0.43 && sensorY < 0.57);
+
+            if (!isNeutralCenter) {
+                if (sensorX < 0.5 && sensorY < 0.5) detectedQuad = 0;
+                else if (sensorX >= 0.5 && sensorY < 0.5) detectedQuad = 1;
+                else if (sensorX < 0.5 && sensorY >= 0.5) detectedQuad = 2;
+                else if (sensorX >= 0.5 && sensorY >= 0.5) detectedQuad = 3;
+            }
+
+            // Highlight Kuadran & Tombol Jawaban
+            for (let i = 0; i < 4; i++) {
+                const quadEl = document.getElementById(`quad-${i}`);
+                const btnEl = document.getElementById(`ansBtn-${i}`);
+                if (i === detectedQuad) {
+                    quadEl.classList.add('scale-[1.02]', 'bg-cyan-500/30', 'border-white');
+                    btnEl.classList.add('ring-2', 'ring-cyan-400');
+                } else {
+                    quadEl.classList.remove('scale-[1.02]', 'bg-cyan-500/30', 'border-white');
+                    btnEl.classList.remove('ring-2', 'ring-cyan-400');
+                }
+            }
+
+            if (detectedQuad !== -1 && (cameraActive || demoWaveActive || motionIntensity > 10)) {
+                if (activeQuadrant === detectedQuad) {
+                    dwellTimer++;
+                    const pct = Math.min(100, Math.round((dwellTimer / DWELL_THRESHOLD) * 100));
+                    document.getElementById('dwellProgressBar').style.width = `${pct}%`;
+                    document.getElementById('dwellPercentText').textContent = `${pct}%`;
+                    const zoneLetters = ['A', 'B', 'C', 'D'];
+                    document.getElementById('dwellStatusText').innerHTML = `<i class="fa-solid fa-hand-Sparkles text-emerald-400 mr-1"></i>Sensor Mengunci <strong>Zona ${zoneLetters[detectedQuad]}</strong>... Tahan sebentar!`;
+
+                    if (dwellTimer >= DWELL_THRESHOLD) {
+                        dwellTimer = 0;
+                        selectAnswer(detectedQuad);
+                    }
+                } else {
+                    activeQuadrant = detectedQuad;
+                    dwellTimer = 1;
+                    playSound('tick');
+                }
+            } else {
+                resetDwellUI();
+            }
+        }
+
+        function resetDwellUI() {
+            dwellTimer = Math.max(0, dwellTimer - 2);
+            const pct = Math.round((dwellTimer / DWELL_THRESHOLD) * 100);
+            const bar = document.getElementById('dwellProgressBar');
+            const txt = document.getElementById('dwellPercentText');
+            if (bar) bar.style.width = `${pct}%`;
+            if (txt) txt.textContent = `${pct}%`;
+        }
+
+        function triggerDemoWave() {
+            demoWaveActive = !demoWaveActive;
+            const statusText = document.getElementById('sensorStatusText');
+            if (demoWaveActive) {
+                statusText.textContent = "Simulasi Tangan Otomatis";
+            } else {
+                statusText.textContent = cameraActive ? "Sensor Kamera Aktif" : "Sensor Siaga";
+            }
+        }
+
+        function setSensorMethod(method) {
+            generateSimulatedSkeleton(sensorX, sensorY);
+        }
+
+        /**************************************************************
+         * 6. LOGIKA KUIS & GAMEPLAY BANGUN RUANG
+         **************************************************************/
+        function loadQuestion() {
+            isAnswered = false;
+            dwellTimer = 0;
+            const q = filteredQuestions[currentQIndex];
+
+            document.getElementById('questionCounter').textContent = `${currentQIndex + 1} / ${filteredQuestions.length}`;
+            document.getElementById('questionCategory').textContent = q.category;
+            document.getElementById('questionText').textContent = q.question;
+
+            const feedbackBanner = document.getElementById('feedbackBanner');
+            feedbackBanner.className = "hidden";
+
+            // Update 4 Tombol Jawaban & 4 Kuadran Sensor
+            q.options.forEach((opt, idx) => {
+                document.getElementById(`ansText-${idx}`).textContent = opt;
+                document.getElementById(`quadText-${idx}`).textContent = opt;
+                const btn = document.getElementById(`ansBtn-${idx}`);
+                btn.classList.remove('bg-emerald-600/80', 'bg-rose-600/80', 'border-emerald-300', 'border-rose-300');
+            });
+
+            // Bangun Objek 3D sesuai soal
+            build3DShape(q.shape);
+        }
+
+        function selectAnswer(selectedIndex) {
+            if (isAnswered) return;
+            isAnswered = true;
+            dwellTimer = 0;
+
+            const q = filteredQuestions[currentQIndex];
+            const feedbackBanner = document.getElementById('feedbackBanner');
+            const selectedBtn = document.getElementById(`ansBtn-${selectedIndex}`);
+            const correctBtn = document.getElementById(`ansBtn-${q.correct}`);
+
+            if (selectedIndex === q.correct) {
+                score += 10 + (streak * 2);
+                streak++;
+                correctCount++;
+                playSound('correct');
+
+                selectedBtn.classList.add('bg-emerald-600/80', 'border-emerald-300');
+                feedbackBanner.className = "block p-3 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 text-xs sm:text-sm font-semibold";
+                feedbackBanner.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400 mr-1.5"></i><strong>Tepat Sekali!</strong> Jawabanmu (${q.options[q.correct]}) benar! ${q.hint}`;
+            } else {
+                streak = 0;
+                playSound('wrong');
+
+                selectedBtn.classList.add('bg-rose-600/80', 'border-rose-300');
+                correctBtn.classList.add('bg-emerald-600/80', 'border-emerald-300');
+                feedbackBanner.className = "block p-3 rounded-xl bg-rose-500/20 border border-rose-400 text-rose-200 text-xs sm:text-sm font-semibold";
+                feedbackBanner.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-400 mr-1.5"></i><strong>Kurang Tepat!</strong> Jawaban yang benar adalah <strong>${q.options[q.correct]}</strong>. ${q.hint}`;
+            }
+
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('streakDisplay').textContent = `${streak}x`;
+
+            // Lanjut otomatis ke soal berikutnya setelah 2.8 detik
+            setTimeout(() => {
+                if (isAnswered) {
+                    nextQuestion();
+                }
+            }, 2800);
+        }
+
+        function showHint() {
+            const q = filteredQuestions[currentQIndex];
+            const feedbackBanner = document.getElementById('feedbackBanner');
+            feedbackBanner.className = "block p-3 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-200 text-xs sm:text-sm font-medium";
+            feedbackBanner.innerHTML = `<i class="fa-solid fa-lightbulb text-amber-400 mr-1.5"></i><strong>Petunjuk Guru:</strong> ${q.hint}`;
+            playSound('tick');
+        }
+
+        function nextQuestion() {
+            if (currentQIndex < filteredQuestions.length - 1) {
+                currentQIndex++;
+                loadQuestion();
+            } else {
+                showFinalResults();
+            }
+        }
+
+        function changeDifficulty() {
+            const level = document.getElementById('levelSelect').value;
+            if (level === 'all') {
+                filteredQuestions = [...questionBank];
+            } else {
+                filteredQuestions = questionBank.filter(q => q.level === level);
+            }
+            currentQIndex = 0;
+            score = 0;
+            streak = 0;
+            correctCount = 0;
+            document.getElementById('scoreDisplay').textContent = "0";
+            document.getElementById('streakDisplay').textContent = "0x";
+            loadQuestion();
+        }
+
+        function resetGame() {
+            currentQIndex = 0;
+            score = 0;
+            streak = 0;
+            correctCount = 0;
+            document.getElementById('scoreDisplay').textContent = "0";
+            document.getElementById('streakDisplay').textContent = "0x";
+            loadQuestion();
+        }
+
+        function showFinalResults() {
+            playSound('win');
+            const modal = document.getElementById('resultModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            const acc = Math.round((correctCount / filteredQuestions.length) * 100);
+            document.getElementById('finalScoreText').textContent = score;
+            document.getElementById('finalAccuracyText').textContent = `${acc}%`;
+        }
+
+        function closeModalAndRestart() {
+            const modal = document.getElementById('resultModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            resetGame();
+        }
+
+        function closeModalToLab() {
+            const modal = document.getElementById('resultModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            switchTab('lab3d');
+        }
+
+        /**************************************************************
+         * 7. LABORATORIUM 3D & NAVIGASI TAB
+         **************************************************************/
+        let currentLabShape = 'kubus';
+
+        function selectLabShape(shapeKey) {
+            currentLabShape = shapeKey;
+            const data = shapeDatabase[shapeKey];
+            if (!data) return;
+
+            // Update tombol aktif
+            ['kubus', 'balok', 'tabung', 'kerucut', 'limas', 'bola'].forEach(k => {
+                const btn = document.getElementById(`labBtn-${k}`);
+                if (k === shapeKey) {
+                    btn.className = "py-2 px-2 rounded-xl bg-cyan-600 text-white font-game text-xs sm:text-sm font-semibold border border-cyan-300 shadow";
+                } else {
+                    btn.className = "py-2 px-2 rounded-xl bg-slate-800 text-slate-300 font-game text-xs sm:text-sm font-semibold border border-slate-700";
+                }
+            });
+
+            document.getElementById('labShapeTitle').textContent = data.name;
+            document.getElementById('labShapeDesc').textContent = data.desc;
+            document.getElementById('labSisi').textContent = data.sisi;
+            document.getElementById('labRusuk').textContent = data.rusuk;
+            document.getElementById('labSudut').textContent = data.sudut;
+            document.getElementById('labVolumeFormula').textContent = data.volFormula;
+            document.getElementById('labAreaFormula').textContent = data.areaFormula;
+
+            build3DShape(shapeKey);
+            updateCalculatorLab();
+            playSound('tick');
+        }
+
+        function updateCalculatorLab() {
+            const val = parseInt(document.getElementById('sizeSlider').value, 10);
+            document.getElementById('sliderValText').textContent = `${val} cm`;
+            const data = shapeDatabase[currentLabShape];
+            if (data) {
+                document.getElementById('calcVolResult').textContent = data.calcVol(val);
+                document.getElementById('calcAreaResult').textContent = data.calcArea(val);
+            }
+            if (currentMesh && wireframeMesh) {
+                const scale = 0.65 + (val / 20) * 0.7;
+                currentMesh.scale.set(scale, scale, scale);
+                wireframeMesh.scale.set(scale, scale, scale);
+            }
+        }
+
+        function toggleWireframeLab() {
+            isWireframeOnly = !isWireframeOnly;
+            build3DShape(currentTab === 'lab3d' ? currentLabShape : filteredQuestions[currentQIndex].shape);
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            const tabs = ['game', 'lab3d', 'tujuan', 'panduan'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tabBtn-${t}`);
+                if (t === tabName) {
+                    btn.className = "sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white border border-cyan-300/50";
+                } else {
+                    btn.className = "sensor-target flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl font-game text-sm sm:text-base font-semibold transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700";
+                }
+            });
+
+            const workspace = document.getElementById('interactiveWorkspace');
+            const viewGame = document.getElementById('view-game');
+            const viewLab = document.getElementById('view-lab3d');
+            const viewTujuan = document.getElementById('view-tujuan');
+            const viewPanduan = document.getElementById('view-panduan');
+            const quadOverlay = document.getElementById('sensorQuadrantsOverlay');
+
+            if (tabName === 'game') {
+                workspace.classList.remove('hidden');
+                viewGame.classList.remove('hidden');
+                viewGame.classList.add('flex');
+                viewLab.classList.add('hidden');
+                viewLab.classList.remove('flex');
+                viewTujuan.classList.add('hidden');
+                viewPanduan.classList.add('hidden');
+                quadOverlay.classList.remove('hidden');
+                build3DShape(filteredQuestions[currentQIndex].shape);
+            } else if (tabName === 'lab3d') {
+                workspace.classList.remove('hidden');
+                viewGame.classList.add('hidden');
+                viewGame.classList.remove('flex');
+                viewLab.classList.remove('hidden');
+                viewLab.classList.add('flex');
+                viewTujuan.classList.add('hidden');
+                viewPanduan.classList.add('hidden');
+                quadOverlay.classList.add('hidden');
+                selectLabShape(currentLabShape);
+            } else if (tabName === 'tujuan') {
+                workspace.classList.add('hidden');
+                viewTujuan.classList.remove('hidden');
+                viewPanduan.classList.add('hidden');
+            } else if (tabName === 'panduan') {
+                workspace.classList.add('hidden');
+                viewTujuan.classList.add('hidden');
+                viewPanduan.classList.remove('hidden');
+            }
+        }
+
+        /**************************************************************
+         * 8. MAIN ANIMATION LOOP (3D + SENSOR VISION REAL-TIME)
+         **************************************************************/
+        function animateLoop() {
+            requestAnimationFrame(animateLoop);
+
+            // Proses Deteksi Gerakan Kamera & Gambar Sensor Visual
+            processOpticalMotion();
+            renderSensorViewport();
+
+            // Putar Objek 3D mengikuti gerakan tangan sensor
+            if (currentMesh && wireframeMesh && renderer && scene && camera) {
+                const targetRotY = (sensorX - 0.5) * Math.PI * 2.2;
+                const targetRotX = (sensorY - 0.5) * Math.PI * 1.5;
+
+                currentMesh.rotation.y += 0.008 + (targetRotY - currentMesh.rotation.y) * 0.08;
+                currentMesh.rotation.x += 0.004 + (targetRotX - currentMesh.rotation.x) * 0.08;
+
+                wireframeMesh.rotation.copy(currentMesh.rotation);
+                renderer.render(scene, camera);
+            }
+        }
+
+        /**************************************************************
+         * 9. LOGIKA SPLASH SCREEN (6 DETIK) & POP-UP AWAL
+         **************************************************************/
+        function initSplashAndPopup() {
+            const splash = document.getElementById('splashScreen');
+            const welcomePopup = document.getElementById('welcomePopup');
+
+            // Durasi Splash Screen tepat 6 detik (6000 ms)
+            setTimeout(() => {
+                if (splash) {
+                    splash.style.opacity = '0';
+                    setTimeout(() => {
+                        splash.classList.add('hidden');
+                        // Tampilkan Pop-Up Awal setelah Splash Screen selesai
+                        if (welcomePopup) {
+                            welcomePopup.classList.remove('hidden');
+                            welcomePopup.classList.add('flex');
+                            playSound('tick');
+                        }
+                    }, 450);
+                }
+            }, 6000);
+        }
+
+        function closeWelcomePopup() {
+            const welcomePopup = document.getElementById('welcomePopup');
+            if (welcomePopup) {
+                welcomePopup.classList.add('hidden');
+                welcomePopup.classList.remove('flex');
+            }
+            playSound('correct');
+        }
+
+        function startWithCameraFromPopup() {
+            closeWelcomePopup();
+            if (!cameraActive) {
+                toggleCameraSensor();
+            }
+        }
+
+        function openTujuanFromPopup() {
+            closeWelcomePopup();
+            switchTab('tujuan');
+        }
+
+        // Inisialisasi saat halaman selesai dimuat
+        window.onload = function () {
+            initSplashAndPopup();
+            initSensorCanvasEvents();
+            generateSimulatedSkeleton(0.5, 0.5);
+            initThreeJS();
+            loadQuestion();
+            animateLoop();
+        };
+    </script>
+</body>
+</html>
